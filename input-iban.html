@@ -180,7 +180,7 @@
           return;
         }
 
-        if(bindValue===undefined) {
+        if(bindValue===undefined || bindValue===null) {
           this._inputs[0].value = null;
           this._inputs[1].value = null;
           this._inputs[2].value = null;
