@@ -1,0 +1,247 @@
+<link rel="import" href="../polymer/polymer-element.html">
+<link rel="import" href="../iron-input/iron-input.html">
+
+<link rel="import" href="../iron-validatable-behavior/iron-validatable-behavior.html">
+<link rel="import" href="../iron-validator-behavior/iron-validator-behavior.html">
+
+
+<dom-module id="input-iban">
+  <template>
+    <style>
+      :host {
+        display: block;
+        outline: none;
+        white-space: nowrap;
+      }
+
+      :host * {
+        outline: none;
+      }
+
+      input {
+        /* Firefox sets a min-width on the input, which can cause layout issues */
+        min-width: 0;
+      }
+
+      :host .container > input {
+        font-family: inherit;
+        font-weight: inherit;
+        font-size: inherit;
+        letter-spacing: inherit;
+        word-spacing: inherit;
+        line-height: inherit;
+        text-shadow: inherit;
+        color: inherit;
+        cursor: inherit;
+        border: inherit;
+      }
+
+      :host .container > input,
+      :host .container > span {
+        font-size: 16px;
+        text-align: left;
+        vertical-align: bottom;
+        text-transform: uppercase;
+      }
+
+    </style>
+
+    <input type="hidden" class="input-element">
+    <iban-validator></iban-validator>
+    <div id="container" class="container">
+      <input maxlength="4" size="4" placeholder="ES00">
+      <span>&nbsp</span>
+      <input maxlength="4" size="4" placeholder="0000">
+      <span>&nbsp</span>
+      <input maxlength="4" size="4" placeholder="0000">
+      <span>&nbsp</span>
+      <input maxlength="2" size="2" placeholder="00">
+      <span>&nbsp</span>
+      <input placeholder="0000000000">
+    </div>
+  </template>
+  <script>
+    class IBANValidator extends Polymer.mixinBehaviors([Polymer.IronValidatorBehavior], Polymer.Element) {
+      static get is() { return "iban-validator" }
+      get factors() { return [ 1, 2, 4, 8, 5, 10, 9, 7, 3, 6 ]; }
+
+      validate(iban) {
+        if(!iban) return true;
+
+        console.log("Validating [" + iban + "]!");
+
+        var country = iban.substr(0, 4);
+        var bank = iban.substr(4, 4);
+        var office = iban.substr(8, 4);
+        var cd = iban.substr(12, 2);
+        var account = iban.substr(14);
+
+        // All of this must be numeric
+        if(bank.length < 2 || isNaN(parseInt(bank))) return false;
+        if(office.length < 4 || isNaN(parseInt(office))) return false;
+        if(cd.length < 2 || isNaN(parseInt(cd))) return false;
+        if(account.length < 10 || isNaN(parseInt(account))) return false;
+
+        // Control digit validation
+        var ccd1 = this.__calculateControlDigit(bank+office);
+        var ccd2 = this.__calculateControlDigit(account);
+        var ccd = "" + ccd1 + ccd2;
+        console.log("Control digit: [" + ccd + "] vs ["+ cd +"]");
+        if (ccd != cd) {
+          console.log("Invalid!!");
+          return false;
+        }
+
+        if(!this.__validateIBANControlDigit(iban)) return false;
+
+        console.log("Valid!!");
+        return true;
+      }
+
+      __calculateControlDigit(code) {
+        var start = 10 - code.length;
+        var number = 0;
+        for(var i=0, length = code.length; i<length; ++i) {
+          number += (parseInt(code.substr(i,1)) * this.factors[i + start]);
+        }
+        return 11 - (number % 11);
+      }
+
+      __validateIBANControlDigit(code) {
+        var country = code.substr(0,2);
+        var ibanCC = code.substr(2,2);
+        var rest = code.substr(4);
+        var first = country.charCodeAt(0)-55;
+        var second = country.charCodeAt(1)-55;
+        var total = rest+first+second+ibanCC;
+
+        var a = parseInt(total.substr(0,8)) % 97;
+        a = parseInt(a+total.substr(8,8)) % 97;
+        a = parseInt(a+total.substr(16)) % 97;
+
+        return a == 1;
+      }
+    }
+
+    const IronInputElement = customElements.get('iron-input');
+
+    /**
+     * `paper-input-iban`
+     * IBAN material input with validation
+     *
+     * @customElement
+     * @polymer
+     * @demo demo/index.html
+     */
+    class InputIban extends Polymer.mixinBehaviors([ Polymer.IronValidatableBehavior], IronInputElement) {
+      static get is() { return 'input-iban'; }
+      static get properties() {
+        return {
+          validator: { type: String, value: "iban-validator" },
+        };
+      }
+
+      ready() {
+        super.ready();
+        this._inputElement = this.root.querySelector('input.input-element');
+        this.$.container.addEventListener('input', this._handleContainerInput.bind(this));
+        this.$.container.addEventListener('keyup', this._handleKeyUp.bind(this));
+        this.$.container.addEventListener('paste', this._handlePaste.bind(this));
+        this._inputs = this.$.container.querySelectorAll('input');
+      }
+
+      _onInput() {}
+
+      _onKeyPress() {}
+
+      _handleKeyUp(event) {
+        if(event.keyCode==8 || event.keyCode==37) { // Backspace, back arrow
+          if(event.target.selectionStart==0) {
+            var previousInput = this._findPrevInput(event.target);
+            if(previousInput) previousInput.focus();
+          }
+        } else if(event.keyCode==39) {
+          if(event.target.selectionStart==event.target.maxLength) {
+            var nextInput = this._findNextInput(event.target);
+            if(nextInput) nextInput.focus();
+          }
+        } else  {
+          if(this._isPrintable(event)) {
+            if(event.target.value.length==event.target.maxLength) {
+              var nextInput = this._findNextInput(event.target);
+              if(nextInput) nextInput.focus();
+            }
+          }
+        }
+      }
+
+      _bindValueChanged(bindValue, inputElement) {
+        if (!inputElement || !this._inputs) {
+          return;
+        }
+
+        if(bindValue===undefined) {
+          this._inputs[0].value = null;
+          this._inputs[1].value = null;
+          this._inputs[2].value = null;
+          this._inputs[3].value = null;
+          this._inputs[4].value = null;
+        } else {
+          this._inputs[0].value = bindValue.substr(0,4);
+          this._inputs[1].value = bindValue.substr(4,4);
+          this._inputs[2].value = bindValue.substr(8,4);
+          this._inputs[3].value = bindValue.substr(12,2);
+          this._inputs[4].value = bindValue.substr(14);
+        }
+
+        this.fire('bind-value-changed', {value: bindValue});
+      }
+
+      _handleContainerInput(event) {
+        var value = "";
+        for(var i=0, length=this._inputs.length; i<length; ++i) {
+          value += this._inputs[i].value;
+        }
+        this.bindValue = value;
+      }
+
+      _handlePaste(event) {
+        var pastedText = undefined;
+        if (window.clipboardData && window.clipboardData.getData) { // IE
+          pastedText = window.clipboardData.getData('Text');
+        } else if (event.clipboardData && event.clipboardData.getData) {
+          pastedText = event.clipboardData.getData('text/plain');
+        }
+
+        this.bindValue = pastedText;
+
+        var last = this._inputs[this._inputs.length-1];
+        if(last) last.focus();
+
+        event.preventDefault();
+        return false;
+      }
+
+      _findNextInput(input) {
+        var length = this._inputs.length;
+        for(var i=0; i < length; ++i) {
+          if(this._inputs[i]===input) break;
+        }
+        i++;
+        return (i < length) ? this._inputs[i] : null;
+      }
+
+      _findPrevInput(input) {
+        var length = this._inputs.length;
+        for(var i=0; i < length; ++i) {
+          if(this._inputs[i]===input) break;
+        }
+        i--;
+        return (i >= 0) ? this._inputs[i] : null;
+      }
+    }
+
+    window.customElements.define(InputIban.is, InputIban);
+    window.customElements.define(IBANValidator.is, IBANValidator);
+  </script>
+</dom-module>
