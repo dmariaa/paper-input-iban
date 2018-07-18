@@ -104,7 +104,8 @@
         for(var i=0, length = code.length; i<length; ++i) {
           number += (parseInt(code.substr(i,1)) * this.factors[i + start]);
         }
-        return 11 - (number % 11);
+        var ccd = 11 - (number % 11);
+        return (ccd==11 ? 0 : (ccd==10 ? 1 : ccd));
       }
 
       __validateIBANControlDigit(code) {
