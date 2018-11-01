@@ -68,6 +68,7 @@
       validate(iban) {
         if(!iban) return true;
 
+        iban = iban.toUpperCase();
         console.log("Validating [" + iban + "]!");
 
         var country = iban.substr(0, 4);
